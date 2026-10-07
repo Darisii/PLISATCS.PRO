@@ -1,0 +1,30 @@
+services:
+  # Renders the repository README as the user-facing preview (repo has no web UI).
+  docs:
+    image: python:3.12-slim
+    working_dir: /workspace
+    network_mode: host
+    volumes:
+      - .:/workspace:ro
+    command: >
+      bash -lc "pip install -q markdown &&
+      mkdir -p /srv && python -c \"import markdown;b=markdown.markdown(open('README.md',encoding='utf-8').read());open('/srv/index.html','w',encoding='utf-8').write('<!doctype html><meta charset=utf-8><title>PLISATCS.PRO</title><body style=\\\"font-family:sans-serif;max-width:800px;margin:2rem auto;padding:0 1rem\\\">'+b)\" &&
+      python -m http.server 3000 --bind 0.0.0.0 --directory /srv"
+
+  # Discord status bot from plisatcs-bot.zip; idles unless DISCORD_TOKEN is provided.
+  bot:
+    image: python:3.12-slim
+    network_mode: host
+    volumes:
+      - ./plisatcs-bot.zip:/bot.zip:ro
+    environment:
+      DISCORD_TOKEN: ${DISCORD_TOKEN:-}
+      CS2_SERVER_IP: ${CS2_SERVER_IP:-127.0.0.1}
+      CS2_SERVER_PORT: ${CS2_SERVER_PORT:-27015}
+      IS_ALLOY: ${IS_ALLOY:-false}
+    command: >
+      bash -lc "python -c \"import zipfile;zipfile.ZipFile('/bot.zip').extractall('/app')\" &&
+      cd /app/plisatcs-bot && pip install -q -r requirements.txt &&
+      if [ -z \"$$DISCORD_TOKEN\" ]; then echo 'DISCORD_TOKEN not set; bot idle'; exec sleep infinity; fi &&
+      python -c \"import json,os;json.dump({'token':os.environ['DISCORD_TOKEN'],'server_ip':os.environ['CS2_SERVER_IP'],'server_port':int(os.environ['CS2_SERVER_PORT'])},open('config.json','w'))\" &&
+      exec python bot.py"
